@@ -527,6 +527,7 @@ G.DefaultSettings = {
 		OnlyArmorIcons = false,
 		HideAllID = false,
 		MythicScore = true,
+		ShowMaxGold = false,
 		FontSize = 12,
 	},
 	Misc = {
@@ -604,6 +605,7 @@ G.AccountSettings = {
 	TimestampFormat = 4,
 	Changelog = {},
 	totalGold = {},
+	dailyGold = {},
 	ShowSlots = false,
 	ShowCoords = false,
 	RepairType = 1,
@@ -1509,6 +1511,7 @@ G.OptionList = { -- type, key, value, name, horizon, doubleline
 		{1, "Tooltip", "MythicScore", L["MDScore"].."*", true, nil, nil, L["MDScoreTip"]},
 		{1, "Tooltip", "ItemQuality", L["ShowItemQuality"].."*"},
 		{1, "Tooltip", "HideAllID", "|cffff0000"..L["HideAllID"], true},
+		{1, "Tooltip", "ShowMaxGold", L["MaxGold"].."*"},
 		{},--blank
 		{1, "Tooltip", "AzeriteArmor", HeaderTag..L["Show AzeriteArmor"]},
 		{1, "Tooltip", "OnlyArmorIcons", L["Armor icons only"].."*", true},

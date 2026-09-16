@@ -1378,6 +1378,10 @@ do
 
 	-- Handle slider
 	function B:ReskinSlider(vertical)
+		if self.Slider and self.Slider.Thumb then
+			return B.ReskinStepperSlider(self) -- MinimalSliderWithSteppers, no own thumb
+		end
+
 		B.StripTextures(self)
 
 		local bg = B.CreateBDFrame(self, 0, true)
@@ -1385,6 +1389,7 @@ do
 		bg:SetPoint("BOTTOMRIGHT", -15, 3)
 
 		local thumb = self:GetThumbTexture()
+		if not thumb then return end
 		thumb:SetTexture(DB.sparkTex)
 		thumb:SetBlendMode("ADD")
 		if vertical then thumb:SetRotation(rad(90)) end

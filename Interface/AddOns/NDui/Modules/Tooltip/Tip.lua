@@ -150,6 +150,9 @@ function TT:OnTooltipCleared()
 --	GameTooltip_ClearProgressBars(self)
 
 	if self.bg then B.SetBorderColor(self.bg) end
+	
+	-- Reset max gold line flag, the fetched value itself is cached per GUID
+	self.hasMaxGold = false
 end
 
 function TT.GetDungeonScore(score)
@@ -165,6 +168,42 @@ function TT:ShowUnitMythicPlusScore(unit)
 	if score and score > 0 then
 		GameTooltip:AddLine(format(L["MythicScore"], TT.GetDungeonScore(score)))
 	end
+end
+
+-- Max gold ever, achievement comparison statistic id
+local MAXGOLD_STAT_ID = 334
+local MAXGOLD_REQUEST_COOLDOWN = 30 -- seconds between two inspect requests for the same player
+local maxGoldCache, maxGoldRequestTime = {}, {}
+local maxGoldPendingGUID, maxGoldPendingTime
+
+local function AddMaxGoldLine(value)
+	if GameTooltip.hasMaxGold then return end
+	GameTooltip.hasMaxGold = true
+	GameTooltip:AddLine(format("|cffffd700%s:|r %s", L["MaxGold"], value))
+end
+
+-- Called from the unit tooltip post-call. Unit tooltips refresh on every unit
+-- update, so the comparison request is throttled and its result cached per GUID.
+function TT.ShowUnitMaxGold(unit)
+	if not C.db["Tooltip"]["ShowMaxGold"] then return end
+	if not unit or not UnitIsPlayer(unit) or unit == "player" then return end
+
+	local guid = UnitGUID(unit)
+	if not guid or B:IsSecretValue(guid) then return end
+
+	local cached = maxGoldCache[guid]
+	if cached then
+		AddMaxGoldLine(cached)
+		return
+	end
+
+	local now = GetTime()
+	if maxGoldPendingGUID == guid and maxGoldPendingTime and now - maxGoldPendingTime < 5 then return end
+	if maxGoldRequestTime[guid] and now - maxGoldRequestTime[guid] < MAXGOLD_REQUEST_COOLDOWN then return end
+
+	maxGoldRequestTime[guid] = now
+	maxGoldPendingGUID, maxGoldPendingTime = guid, now
+	SetAchievementComparisonUnit(unit)
 end
 
 local function ShouldHideInCombat()
@@ -347,6 +386,7 @@ function TT:OnTooltipSetUnit()
 	if isPlayer then
 		TT.InspectUnitItemLevel(self, unit)
 		TT.ShowUnitMythicPlusScore(self, unit)
+		TT.ShowUnitMaxGold(unit)
 	end
 	TT.PetInfo_Setup(self, unit)
 
@@ -592,6 +632,29 @@ function TT:OnLogin()
 	TT:SetupTooltipID()
 	TT:AzeriteArmor()
 	B:RegisterEvent("MODIFIER_STATE_CHANGED", TT.ResetUnit)
+	
+	-- Max gold Achievement Handler
+	local goldFrame = CreateFrame("Frame")
+	goldFrame:RegisterEvent("INSPECT_ACHIEVEMENT_READY")
+	goldFrame:SetScript("OnEvent", function(_, event, guid)
+		local pendingGUID = maxGoldPendingGUID
+		if not pendingGUID then return end
+		if guid and B:NotSecretValue(guid) and guid ~= pendingGUID then return end
+
+		maxGoldPendingGUID, maxGoldPendingTime = nil, nil
+		local maxGold = GetComparisonStatistic(MAXGOLD_STAT_ID)
+		if not maxGold or maxGold == "" or B:IsSecretValue(maxGold) then return end
+		maxGoldCache[pendingGUID] = maxGold
+
+		-- Append the line to the tooltip still showing that player.
+		-- Never call GameTooltip:Show() here, that restarts the whole tooltip cycle.
+		if not GameTooltip:IsShown() then return end
+		local data = GameTooltip:GetTooltipData()
+		local shownGUID = data and B:NotSecretValue(data.guid) and data.guid
+		if shownGUID == pendingGUID then
+			AddMaxGoldLine(maxGold)
+		end
+	end)
 end
 
 -- Tooltip Skin Registration

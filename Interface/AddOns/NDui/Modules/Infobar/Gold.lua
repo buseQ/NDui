@@ -15,6 +15,7 @@ local CalculateTotalNumberOfFreeBagSlots = C_Container.CalculateTotalNumberOfFre
 local C_Container_UseContainerItem = C_Container.UseContainerItem
 local C_Container_GetContainerNumSlots = C_Container.GetContainerNumSlots
 local C_Container_GetContainerItemInfo = C_Container.GetContainerItemInfo
+local date = date
 
 local slotString = L["Bags"]..": %s%d"
 local showGoldGap = 100 * 1e4
@@ -22,6 +23,8 @@ local maxAccounts = 30 -- max visible characters
 local TIER_CHARGE_ID = 3465 -- 12.1 S2
 
 local profit, spent, oldMoney = 0, 0, 0
+local dailyProfit, dailySpent = 0, 0
+local lastResetDate = nil
 local myName, myRealm = DB.MyName, DB.MyRealm
 myRealm = gsub(myRealm, "%s", "") -- fix for multi words realm name
 
@@ -66,6 +69,15 @@ info.eventList = {
 	"PLAYER_ENTERING_WORLD",
 }
 
+local function checkNewDay()
+	local today = date("%Y-%m-%d")
+	if lastResetDate ~= today then
+		dailyProfit = 0
+		dailySpent = 0
+		lastResetDate = today
+	end
+end
+
 info.onEvent = function(self, event, arg1)
 	if event == "PLAYER_ENTERING_WORLD" then
 		oldMoney = GetMoney()
@@ -74,16 +86,29 @@ info.onEvent = function(self, event, arg1)
 		if NDuiADB["ShowSlots"] then
 			self:RegisterEvent("BAG_UPDATE")
 		end
+		if not NDuiADB["dailyGold"][myRealm] then NDuiADB["dailyGold"][myRealm] = {} end
+		if not NDuiADB["dailyGold"][myRealm][myName] then
+			NDuiADB["dailyGold"][myRealm][myName] = {}
+			NDuiADB["dailyGold"][myRealm][myName]["dailyProfit"] = 0
+			NDuiADB["dailyGold"][myRealm][myName]["dailySpent"] = 0
+			NDuiADB["dailyGold"][myRealm][myName]["lastResetDate"] = nil
+		else
+			dailyProfit = NDuiADB["dailyGold"][myRealm][myName]["dailyProfit"]
+			dailySpent = NDuiADB["dailyGold"][myRealm][myName]["dailySpent"]
+			lastResetDate = NDuiADB["dailyGold"][myRealm][myName]["lastResetDate"]
+		end
 	elseif event == "BAG_UPDATE" then
 		if arg1 < 0 or arg1 > 4 then return end
 	end
-
+	checkNewDay()
 	local newMoney = GetMoney()
 	local change = newMoney - oldMoney	-- Positive if we gain money
 	if oldMoney > newMoney then			-- Lost Money
 		spent = spent - change
+		dailySpent = dailySpent - change
 	else								-- Gained Moeny
 		profit = profit + change
+		dailyProfit = dailyProfit + change
 	end
 	if NDuiADB["ShowSlots"] then
 		self.text:SetText(getSlotString())
@@ -95,6 +120,9 @@ info.onEvent = function(self, event, arg1)
 	if not NDuiADB["totalGold"][myRealm][myName] then NDuiADB["totalGold"][myRealm][myName] = {} end
 	NDuiADB["totalGold"][myRealm][myName][1] = GetMoney()
 	NDuiADB["totalGold"][myRealm][myName][2] = DB.MyClass
+	NDuiADB["dailyGold"][myRealm][myName]["dailyProfit"] = dailyProfit
+	NDuiADB["dailyGold"][myRealm][myName]["dailySpent"] = dailySpent
+	NDuiADB["dailyGold"][myRealm][myName]["lastResetDate"] = lastResetDate
 
 	oldMoney = newMoney
 end
@@ -174,6 +202,16 @@ info.onEnter = function(self)
 		GameTooltip:AddDoubleLine(L["Deficit"], module:GetMoneyString(spent-profit, true), 1,0,0, 1,1,1)
 	elseif profit > spent then
 		GameTooltip:AddDoubleLine(L["Profit"], module:GetMoneyString(profit-spent, true), 0,1,0, 1,1,1)
+	end
+	GameTooltip:AddLine(" ")
+	checkNewDay()
+	GameTooltip:AddLine(L["Today"], .6, .8, 1)
+	GameTooltip:AddDoubleLine(L["Earned"], module:GetMoneyString(dailyProfit, true), 1, 1, 1, 1, 1, 1)
+	GameTooltip:AddDoubleLine(L["Spent"], module:GetMoneyString(dailySpent, true), 1, 1, 1, 1, 1, 1)
+	if dailyProfit < dailySpent then
+		GameTooltip:AddDoubleLine(L["Deficit"], module:GetMoneyString(dailySpent - dailyProfit, true), 1, 0, 0, 1, 1, 1)
+	elseif dailyProfit > dailySpent then
+		GameTooltip:AddDoubleLine(L["Profit"], module:GetMoneyString(dailyProfit - dailySpent, true), 0, 1, 0, 1, 1, 1)
 	end
 	GameTooltip:AddLine(" ")
 
